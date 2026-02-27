@@ -5,8 +5,7 @@ from google.cloud import bigquery
 from google.oauth2 import service_account
 import json
 
-# --- 1. CLEAN THE INPUTS ---
-# This ensures no accidental spaces or slashes break the link
+# --- 1. SETUP ---
 METABASE_URL = os.getenv("METABASE_URL").strip().rstrip('/')
 USERNAME = os.getenv("USERNAME").strip()
 PASSWORD = os.getenv("SWAPNIL_SECRET_KEY").strip()
@@ -17,47 +16,38 @@ DATASET_ID = os.getenv("BIGQUERY_DATASET_ID")
 TABLE_ID = os.getenv("BIGQUERY_TABLE_ID")
 SERVICE_ACCOUNT_JSON = os.getenv("SERVICE_ACCOUNT_JSON")
 
-# --- 2. AUTHENTICATE ---
-# Use the URL exactly as you have it
+# --- 2. THE "SMART AUTH" ---
+# Try the standard path first
 login_url = f"{METABASE_URL}/api/session"
+print(f"DEBUG: Trying primary login at {login_url}")
 
-# We MUST tell the server we are sending JSON, otherwise it returns a 404
+auth_payload = {"username": USERNAME, "password": PASSWORD}
 headers = {"Content-Type": "application/json"}
-auth_data = {"username": USERNAME, "password": PASSWORD}
 
-session_response = requests.post(login_url, json=auth_data, headers=headers)
+session_response = requests.post(login_url, json=auth_payload, headers=headers)
+
+# FALLBACK: If 404, try adding a trailing slash (Metabase quirk)
+if session_response.status_code == 404:
+    print("DEBUG: Primary failed (404), trying fallback with trailing slash...")
+    login_url = f"{METABASE_URL}/api/session/"
+    session_response = requests.post(login_url, json=auth_payload, headers=headers)
 
 if session_response.status_code != 200:
-    print(f"Login failed! Code: {session_response.status_code}")
-    print(f"Response Body: {session_response.text}")
-    # If it still says 404, the issue is likely a hidden character in the METABASE_URL secret
+    print(f"FAILED. Code: {session_response.status_code} | Body: {session_response.text}")
     exit(1)
 
 session_id = session_response.json().get('id')
 
-# --- 3. FETCH DATA ---
-headers = {"X-Metabase-Session": session_id}
+# --- 3. FETCH & UPLOAD ---
 query_url = f"{METABASE_URL}/api/card/{CARD_ID}/query/json"
-data_response = requests.post(query_url, headers=headers)
-
-if data_response.status_code != 200:
-    print(f"Query failed! Response: {data_response.text}")
-    exit(1)
-
+data_response = requests.post(query_url, headers={"X-Metabase-Session": session_id})
 df = pd.DataFrame(data_response.json())
 
-# --- 4. UPLOAD TO BIGQUERY ---
-try:
-    info = json.loads(SERVICE_ACCOUNT_JSON)
-    credentials = service_account.Credentials.from_service_account_info(info)
-    client = bigquery.Client(credentials=credentials, project=PROJECT_ID)
+info = json.loads(SERVICE_ACCOUNT_JSON)
+credentials = service_account.Credentials.from_service_account_info(info)
+client = bigquery.Client(credentials=credentials, project=PROJECT_ID)
 
-    full_table_path = f"{PROJECT_ID}.{DATASET_ID}.{TABLE_ID}"
-    job_config = bigquery.LoadJobConfig(write_disposition="WRITE_TRUNCATE")
+full_table_path = f"{PROJECT_ID}.{DATASET_ID}.{TABLE_ID}"
+client.load_table_from_dataframe(df, full_table_path, job_config=bigquery.LoadJobConfig(write_disposition="WRITE_TRUNCATE")).result()
 
-    job = client.load_table_from_dataframe(df, full_table_path, job_config=job_config)
-    job.result() 
-    print(f"Success! Data updated in {full_table_path}")
-except Exception as e:
-    print(f"BigQuery Error: {str(e)}")
-    exit(1)
+print(f"Success! Data updated in {full_table_path}")
