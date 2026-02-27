@@ -1,0 +1,38 @@
+name: Metabase to BigQuery Automation
+
+on:
+  schedule:
+    # This runs every day at 6:00 AM UTC. 
+    # You can change '0 6 * * *' to any interval you like.
+    - cron: '0 6 * * *' 
+  workflow_dispatch: # This allows you to run it manually for testing!
+
+jobs:
+  run-sync-script:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Execute Python Script
+        env:
+          # This maps your GitHub Secrets to the script variables
+          METABASE_URL: ${{ secrets.METABASE_URL }}
+          USERNAME: ${{ secrets.USERNAME }}
+          SWAPNIL_SECRET_KEY: ${{ secrets.SWAPNIL_SECRET_KEY }}
+          BIGQUERY_PROJECT_ID: ${{ secrets.BIGQUERY_PROJECT_ID }}
+          BIGQUERY_DATASET_ID: ${{ secrets.BIGQUERY_DATASET_ID }}
+          BIGQUERY_TABLE_ID: ${{ secrets.BIGQUERY_TABLE_ID }}
+          SERVICE_ACCOUNT_JSON: ${{ secrets.SERVICE_ACCOUNT_JSON }}
+        run: python sync_to_bq.py
