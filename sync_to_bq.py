@@ -18,10 +18,27 @@ TABLE_ID = os.getenv("BIGQUERY_TABLE_ID")
 SERVICE_ACCOUNT_JSON = os.getenv("SERVICE_ACCOUNT_JSON")
 
 # --- 2. AUTHENTICATE WITH METABASE ---
-# We use your USERNAME and SWAPNIL_SECRET_KEY to get permission to run the query
 auth_data = {"username": USERNAME, "password": PASSWORD}
 session_response = requests.post(f"{METABASE_URL}/api/session", json=auth_data)
-session_id = session_response.json()['id']
+
+# Check if login was successful
+if session_response.status_status_code != 200:
+    print(f"Login failed! Response: {session_response.text}")
+    exit(1)
+
+session_id = session_response.json().get('id')
+
+# --- 3. FETCH DATA FROM METABASE ---
+headers = {"X-Metabase-Session": session_id}
+query_url = f"{METABASE_URL}/api/card/{CARD_ID}/query/json"
+data_response = requests.post(query_url, headers=headers)
+
+# Check if query was successful
+if data_response.status_code != 200:
+    print(f"Query failed! Response: {data_response.text}")
+    exit(1)
+
+rows = data_response.json()
 
 # --- 3. FETCH DATA FROM METABASE ---
 headers = {"X-Metabase-Session": session_id}
