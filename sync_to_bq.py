@@ -22,7 +22,7 @@ auth_data = {"username": USERNAME, "password": PASSWORD}
 session_response = requests.post(f"{METABASE_URL}/api/session", json=auth_data)
 
 # Check if login was successful
-if session_response.status_status_code != 200:
+if session_response.status_code != 200:
     print(f"Login failed! Response: {session_response.text}")
     exit(1)
 
