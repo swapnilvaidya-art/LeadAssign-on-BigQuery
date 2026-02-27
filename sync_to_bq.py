@@ -18,16 +18,19 @@ TABLE_ID = os.getenv("BIGQUERY_TABLE_ID")
 SERVICE_ACCOUNT_JSON = os.getenv("SERVICE_ACCOUNT_JSON")
 
 # --- 2. AUTHENTICATE ---
-# Metabase expects the login at /api/session
+# Use the URL exactly as you have it
 login_url = f"{METABASE_URL}/api/session"
-print(f"DEBUG: Attempting login at {login_url}") # This will show us the truth in the logs
 
+# We MUST tell the server we are sending JSON, otherwise it returns a 404
+headers = {"Content-Type": "application/json"}
 auth_data = {"username": USERNAME, "password": PASSWORD}
-session_response = requests.post(login_url, json=auth_data)
+
+session_response = requests.post(login_url, json=auth_data, headers=headers)
 
 if session_response.status_code != 200:
     print(f"Login failed! Code: {session_response.status_code}")
     print(f"Response Body: {session_response.text}")
+    # If it still says 404, the issue is likely a hidden character in the METABASE_URL secret
     exit(1)
 
 session_id = session_response.json().get('id')
