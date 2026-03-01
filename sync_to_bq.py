@@ -57,7 +57,16 @@ for q in QUERIES:
     data_res = requests.post(query_url, headers={"X-Metabase-Session": session_id})
     
     if data_res.status_code == 200:
-        df = pd.DataFrame(data_res.json())
+        raw_data = data_res.json()
+        df = pd.DataFrame(raw_data)
+        
+        # DEBUG: Let's see the first 2 rows of raw data to check for nesting
+        print(f"DEBUG: First 2 rows of raw data for {q['table_id']}:")
+        print(raw_data[:2])
+
+        # FORCE EVERYTHING TO STRING: This prevents BigQuery from rejecting 
+        # data due to type mismatches (common cause of blanks)
+        df = df.astype(str)
         
         # --- FIX COLUMN ORDER ---
         if q['table_id'] == "lead_assignments":
@@ -66,8 +75,6 @@ for q in QUERIES:
                 "lead_owner", "sales_user_email", "modified_on", 
                 "event", "prospect_stage", "assign_date", "m0_or_not", "course"
             ]
-            df = df[[c for c in column_order if c in df.columns]]
-            
         elif q['table_id'] == "stage_changes":
             column_order = [
                 "lead_created_on", "prospect_id", "prospect_email", 
@@ -75,12 +82,17 @@ for q in QUERIES:
                 "event", "previous_stage", "current_stage", 
                 "StageChange_date", "m0_or_not", "course"
             ]
-            df = df[[c for c in column_order if c in df.columns]]
+        
+        # Reorder and handle missing columns
+        df = df.reindex(columns=column_order)
 
         # --- PUSH TO BIGQUERY ---
         table_path = f"{PROJECT_ID}.{DATASET_ID}.{q['table_id']}"
-        job_config = bigquery.LoadJobConfig(write_disposition="WRITE_TRUNCATE")
+        job_config = bigquery.LoadJobConfig(
+            write_disposition="WRITE_TRUNCATE",
+            autodetect=True # Let BigQuery re-evaluate the schema
+        )
         client.load_table_from_dataframe(df, table_path, job_config=job_config).result()
-        print(f"Successfully updated {table_path} with fixed column order!")
+        print(f"Successfully updated {table_path}")
     else:
         print(f"Failed to fetch Query {q['card_id']}: {data_res.status_code}")
