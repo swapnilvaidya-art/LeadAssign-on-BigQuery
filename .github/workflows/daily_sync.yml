@@ -4,7 +4,7 @@ on:
   schedule:
     # This runs every day at 6:00 AM UTC. 
     # You can change '0 6 * * *' to any interval you like.
-    - cron: '0 6 * * *' 
+    - cron: '0 * * * *' 
   workflow_dispatch: # This allows you to run it manually for testing!
 
 jobs:
