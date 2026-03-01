@@ -64,7 +64,7 @@ for q in QUERIES:
                     "lead_created_on", "prospect_id", "prospect_email", 
                     "lead_owner", "sales_user_email", "modified_on", 
                     "event", "previous_stage", "current_stage", 
-                    "StageChange_date", "m0_or_not", "course"
+                    "stagechange_date", "m0_or_not", "course"
                 ]
             
             df = df.reindex(columns=column_order)
