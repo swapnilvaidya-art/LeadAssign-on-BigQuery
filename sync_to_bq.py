@@ -52,7 +52,7 @@ for q in QUERIES:
 
             # 1. CONVERT DATES (While they are still objects)
             # Using lowercase to match what we'll use in the column_order below
-            date_cols = ["lead_created_on", "modified_on", "assign_date", "StageChange_date"]
+            date_cols = ["lead_created_on", "modified_on", "assign_date", "stagechange_date"]
             for col in date_cols:
                 if col in df.columns:
                     df[col] = pd.to_datetime(df[col], errors='coerce').dt.strftime('%Y-%m-%d')
