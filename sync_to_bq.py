@@ -64,7 +64,7 @@ for q in QUERIES:
             column_order = [
                 "lead_created_on", "prospect_id", "prospect_email", 
                 "lead_owner", "sales_user_email", "modified_on", 
-                "event", "prospect_stage", "assign_date", "course"
+                "event", "prospect_stage", "assign_date", "m0_or_not", "course"
             ]
             df = df[[c for c in column_order if c in df.columns]]
             
@@ -73,7 +73,7 @@ for q in QUERIES:
                 "lead_created_on", "prospect_id", "prospect_email", 
                 "lead_owner", "sales_user_email", "modified_on", 
                 "event", "previous_stage", "current_stage", 
-                "StageChange_date", "M0_or_Not", "course"
+                "StageChange_date", "m0_or_not", "course"
             ]
             df = df[[c for c in column_order if c in df.columns]]
 
