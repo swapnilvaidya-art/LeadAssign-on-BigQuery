@@ -21,22 +21,31 @@ QUERIES = [
 ]
 
 # --- 2. AUTHENTICATE WITH METABASE ---
-login_url = f"{METABASE_URL}/metabase/api/session"
-print(f"Attempting login at {login_url}")
+session_id = None
+# Newton School usually needs the /metabase prefix. We try that first.
+possible_urls = [f"{METABASE_URL}/metabase", METABASE_URL]
+final_base_url = METABASE_URL
 
-try:
-    auth_res = requests.post(login_url, 
+for base in possible_urls:
+    login_url = f"{base}/api/session"
+    print(f"DEBUG: Trying login at {login_url}")
+    try:
+        res = requests.post(login_url, 
                             json={"username": USERNAME, "password": PASSWORD}, 
                             headers={"Content-Type": "application/json"},
                             timeout=15)
-    if auth_res.status_code != 200:
-        # Fallback if /metabase prefix isn't needed
-        login_url = f"{METABASE_URL}/api/session"
-        auth_res = requests.post(login_url, json={"username": USERNAME, "password": PASSWORD}, headers={"Content-Type": "application/json"})
-    
-    session_id = auth_res.json().get('id')
-except Exception as e:
-    print(f"Auth Error: {e}")
+        if res.status_code == 200:
+            session_id = res.json().get('id')
+            final_base_url = base
+            print("DEBUG: Login Successful!")
+            break
+        else:
+            print(f"DEBUG: Path {login_url} returned {res.status_code}")
+    except Exception as e:
+        print(f"DEBUG: Connection error at {base}: {e}")
+
+if not session_id:
+    print("FATAL: Could not get a Session ID from Metabase.")
     exit(1)
 
 # --- 3. PROCESS EACH QUERY ---
@@ -45,21 +54,23 @@ credentials = service_account.Credentials.from_service_account_info(info)
 client = bigquery.Client(credentials=credentials, project=PROJECT_ID)
 
 for q in QUERIES:
-    print(f"Updating Table: {q['table_id']}...")
-    
-    # Use the correct base URL based on which login worked
-    base_api = login_url.replace('/api/session', '')
-    query_url = f"{base_api}/api/card/{q['card_id']}/query/json"
+    # Use the base URL that actually worked for login
+    query_url = f"{final_base_url}/api/card/{q['card_id']}/query/json"
+    print(f"DEBUG: Fetching Query {q['card_id']} from {query_url}")
     
     data_res = requests.post(query_url, headers={"X-Metabase-Session": session_id})
     
     if data_res.status_code == 200:
+        # Check if response is empty string
+        if not data_res.text:
+            print(f"ERROR: Query {q['card_id']} returned no data.")
+            continue
+            
         df = pd.DataFrame(data_res.json())
         table_path = f"{PROJECT_ID}.{DATASET_ID}.{q['table_id']}"
         
-        # WRITE_TRUNCATE replaces the table with fresh data
         job_config = bigquery.LoadJobConfig(write_disposition="WRITE_TRUNCATE")
         client.load_table_from_dataframe(df, table_path, job_config=job_config).result()
         print(f"Successfully updated {table_path}")
     else:
-        print(f"Failed to fetch Query {q['card_id']}: {data_res.text}")
+        print(f"Failed to fetch Query {q['card_id']}: {data_res.status_code} - {data_res.text}")
