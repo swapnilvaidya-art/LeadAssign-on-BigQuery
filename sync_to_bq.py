@@ -43,16 +43,27 @@ for q in QUERIES:
     print(f"DEBUG: Fetching {q['table_id']} (ID: {q['card_id']})...")
     
     try:
-        # TIMEOUT increased to 180s to prevent "Response ended prematurely"
         data_res = requests.post(query_url, 
                                  headers={"X-Metabase-Session": session_id}, 
                                  timeout=180) 
         
         if data_res.status_code == 200:
             df = pd.DataFrame(data_res.json())
-            df = df.astype(str) # Prevents blank cells from type mismatch
 
-            # --- COLUMN ORDER ---
+            # 1. CONVERT DATES (While they are still objects)
+            # Using lowercase to match what we'll use in the column_order below
+            date_cols = ["lead_created_on", "modified_on", "assign_date", "StageChange_date"]
+            for col in date_cols:
+                if col in df.columns:
+                    df[col] = pd.to_datetime(df[col], errors='coerce').dt.strftime('%Y-%m-%d')
+
+            # 2. FORCE OTHER COLUMNS TO STRING (to prevent BQ rejection)
+            # We skip the date columns so they stay in a format BQ likes
+            for col in df.columns:
+                if col not in date_cols:
+                    df[col] = df[col].astype(str)
+
+            # 3. FIX COLUMN ORDER
             if q['table_id'] == "lead_assignments":
                 column_order = [
                     "lead_created_on", "prospect_id", "prospect_email", 
@@ -69,13 +80,12 @@ for q in QUERIES:
             
             df = df.reindex(columns=column_order)
 
-            # --- PUSH TO BQ ---
+            # 4. PUSH TO BQ
             table_path = f"{PROJECT_ID}.{DATASET_ID}.{q['table_id']}"
             job_config = bigquery.LoadJobConfig(write_disposition="WRITE_TRUNCATE")
             client.load_table_from_dataframe(df, table_path, job_config=job_config).result()
             print(f"SUCCESS: Updated {table_path}")
             
-            # Small rest between queries to let the Metabase server breathe
             time.sleep(5) 
             
         else:
